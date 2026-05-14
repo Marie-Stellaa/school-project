@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "953241753904",
+    "project_id": "device-streaming-457735d3",
+    "storage_bucket": "device-streaming-457735d3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:953241753904:android:62fe52dcda5ed89d3e90f5",
+        "android_client_info": {
+          "package_name": "com.Phanie.focus_launch"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "953241753904-ihrbmr1942655dr57cpm6bhfbfii6k58.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQzcue1P9d37uGTuFVff7syHZsD95MVGU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "953241753904-ihrbmr1942655dr57cpm6bhfbfii6k58.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "953241753904-1p4k47v964fsml3iuhr6p3f1ap03qb9p.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.Phanie.focusLaunch"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
