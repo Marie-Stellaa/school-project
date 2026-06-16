@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import 'app_langage.dart';
 import 'create_task_screen.dart';
 import 'stats_screen.dart';
@@ -26,13 +27,11 @@ class _HomeScreenState extends State<HomeScreen> {
   String _profileImageUrl = '';
   bool _hasShownAccessibilityDialog = false;
 
-  // Cache pour le streak
   int _cachedStreak = 0;
   DateTime _lastStreakUpdate = DateTime(2000);
 
   static const _channel = MethodChannel('com.Phanie.focus_launch/blocker');
 
-  // Écrans pour la navigation
   late final List<Widget> _screens;
 
   @override
@@ -87,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final doc = await _firestore.collection('users').doc(_user!.uid).get();
       if (doc.exists && mounted) {
         setState(() {
-          _profileImageUrl = doc.data()?['profileImageUrl'] ?? '';
+          _profileImageUrl = doc.data()?['photoUrl'] ?? '';
         });
       }
     } catch (e) {
@@ -101,7 +100,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _loadStreak(),
       _loadProfileImage(),
     ]);
-    // Mettre à jour l'écran HomeContent avec les nouvelles valeurs
     if (mounted) {
       setState(() {
         _screens[0] = HomeContent(
@@ -114,7 +112,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadStreak() async {
-    // Vérifier si le cache est encore valide (moins de 5 minutes)
     if (DateTime.now().difference(_lastStreakUpdate).inMinutes < 5 && _cachedStreak > 0) {
       if (mounted) setState(() => _streak = _cachedStreak);
       return;
@@ -136,8 +133,6 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-
-      // Optimisation : Récupérer seulement les 30 derniers jours avec limite
       final cutoff = Timestamp.fromDate(today.subtract(const Duration(days: 30)));
 
       final snap = await _firestore
@@ -217,11 +212,9 @@ class _HomeScreenState extends State<HomeScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0A0F2C),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Activer maintenant',
-                style: TextStyle(color: Colors.white)),
+            child: const Text('Activer maintenant', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -286,7 +279,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// Contenu principal de l'accueil
 class HomeContent extends StatefulWidget {
   final int streak;
   final String profileImageUrl;
@@ -562,23 +554,26 @@ class _HomeContentState extends State<HomeContent> {
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Row(
         children: [
-          // Avatar avec photo de profil
+          // ✅ Avatar avec photo base64
           StreamBuilder<DocumentSnapshot>(
             stream: _user != null
                 ? _firestore.collection('users').doc(_user!.uid).snapshots()
                 : null,
             builder: (context, snapshot) {
               final data = snapshot.data?.data() as Map<String, dynamic>?;
-              final imageUrl = data?['profileImageUrl'] ?? widget.profileImageUrl;
+              final base64Photo = data?['photoBase64'];
               final pseudo = data?['pseudo'] ?? _pseudo;
+
+              ImageProvider? imageProvider;
+              if (base64Photo != null && base64Photo.isNotEmpty) {
+                imageProvider = MemoryImage(base64Decode(base64Photo));
+              }
 
               return CircleAvatar(
                 radius: 22,
                 backgroundColor: const Color(0xFF4FC3F7),
-                backgroundImage: imageUrl.isNotEmpty
-                    ? NetworkImage(imageUrl)
-                    : null,
-                child: imageUrl.isEmpty
+                backgroundImage: imageProvider,
+                child: imageProvider == null
                     ? Text(
                   pseudo.isNotEmpty ? pseudo[0].toUpperCase() : 'U',
                   style: const TextStyle(
@@ -822,7 +817,6 @@ class _HomeContentState extends State<HomeContent> {
   }
 }
 
-// ====================== Notifications Sheet ======================
 class _NotificationsSheet extends StatelessWidget {
   final List<QueryDocumentSnapshot> tasks;
   const _NotificationsSheet({required this.tasks});
@@ -915,8 +909,7 @@ class _NotificationsSheet extends StatelessWidget {
                               color: const Color(0xFFFFF3CD),
                               borderRadius: BorderRadius.circular(10)),
                           child: const Icon(Icons.access_time_rounded,
-                              color: Color(0xFFBA7517),
-                              size: 20),
+                              color: Color(0xFFBA7517), size: 20),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -932,8 +925,7 @@ class _NotificationsSheet extends StatelessWidget {
                               Text(
                                   'Progression : ${(progress * 100).toInt()}% — $duration h prévues',
                                   style: const TextStyle(
-                                      color: Colors.black45,
-                                      fontSize: 11)),
+                                      color: Colors.black45, fontSize: 11)),
                             ],
                           ),
                         ),

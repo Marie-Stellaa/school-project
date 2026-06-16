@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'login_screen.dart';
 import 'settings_screen.dart';
 
@@ -18,14 +18,12 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _user = FirebaseAuth.instance.currentUser;
   final _firestore = FirebaseFirestore.instance;
-  final _storage = FirebaseStorage.instance;
 
   Map<String, dynamic>? _userData;
   int _taskCount = 0;
   int _doneCount = 0;
 
-  // Plus de _localPhoto en mémoire — on utilise l'URL Firestore
-  File? _uploadingPhoto; // temporaire pendant l'upload
+  File? _uploadingPhoto;
   bool _isUploading = false;
 
   @override
@@ -59,8 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '$p $n'.trim();
   }
 
-  // URL de la photo stockée dans Firestore
-  String? get _photoUrl => _userData?['photoUrl'];
+  String? get _photoBase64 => _userData?['photoBase64'];
 
   String _formatBirthDate(String iso) {
     try {
@@ -69,7 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (_) { return ''; }
   }
 
-  // ── Upload photo vers Firebase Storage ───────────────────────────────────
+  // ── Upload photo en base64 dans Firestore ─────────────────────────────────
   Future<void> _uploadPhoto(File file) async {
     if (_user == null) return;
 
@@ -79,27 +76,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
-      // 1. Upload vers Firebase Storage
-      final ref = _storage
-          .ref()
-          .child('profile_photos')
-          .child('${_user!.uid}.jpg');
+      // Lire le fichier et convertir en base64
+      final bytes = await file.readAsBytes();
+      final base64String = base64Encode(bytes);
 
-      await ref.putFile(
-        file,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-
-      // 2. Récupérer l'URL publique
-      final url = await ref.getDownloadURL();
-
-      // 3. Sauvegarder l'URL dans Firestore
+      // Sauvegarder dans Firestore
       await _firestore.collection('users').doc(_user!.uid).set(
-        {'photoUrl': url},
+        {'photoBase64': base64String},
         SetOptions(merge: true),
       );
 
-      // 4. Recharger les données utilisateur
       await _loadUserData();
 
       if (mounted) {
@@ -125,20 +111,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── Supprimer la photo ────────────────────────────────────────────────────
   Future<void> _deletePhoto() async {
     if (_user == null) return;
-    try {
-      // Supprimer du Storage
-      await _storage
-          .ref()
-          .child('profile_photos')
-          .child('${_user!.uid}.jpg')
-          .delete();
-    } catch (_) {
-      // Fichier peut-être déjà absent, on continue
-    }
 
-    // Supprimer l'URL de Firestore
     await _firestore.collection('users').doc(_user!.uid).update(
-      {'photoUrl': FieldValue.delete()},
+      {'photoBase64': FieldValue.delete()},
     );
 
     await _loadUserData();
@@ -157,11 +132,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ImageProvider? imageProvider;
 
     if (_uploadingPhoto != null) {
-      // Pendant l'upload : affiche le fichier local en aperçu
       imageProvider = FileImage(_uploadingPhoto!);
-    } else if (_photoUrl != null && _photoUrl!.isNotEmpty) {
-      // Photo persistée : chargée depuis Firebase Storage via URL
-      imageProvider = NetworkImage(_photoUrl!);
+    } else if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
+      imageProvider = MemoryImage(base64Decode(_photoBase64!));
     }
 
     return Stack(
@@ -181,7 +154,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           )
               : null,
         ),
-        // Indicateur de chargement pendant l'upload
         if (_isUploading)
           Positioned.fill(
             child: CircleAvatar(
@@ -321,8 +293,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Navigator.pop(context);
             final img = await ImagePicker().pickImage(
               source: ImageSource.camera,
-              imageQuality: 80,
-              maxWidth: 512,
+              imageQuality: 50,
+              maxWidth: 300,
             );
             if (img != null && mounted) await _uploadPhoto(File(img.path));
           }),
@@ -331,12 +303,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Navigator.pop(context);
             final img = await ImagePicker().pickImage(
               source: ImageSource.gallery,
-              imageQuality: 80,
-              maxWidth: 512,
+              imageQuality: 50,
+              maxWidth: 300,
             );
             if (img != null && mounted) await _uploadPhoto(File(img.path));
           }),
-          if (_photoUrl != null) ...[
+          if (_photoBase64 != null) ...[
             const SizedBox(height: 8),
             _photoOption(
               icon: Icons.delete_outline,
@@ -514,7 +486,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ]),
                     const SizedBox(height: 20),
-                    // Avatar avec photo persistée
                     GestureDetector(
                       onTap: _isUploading ? null : _showPhotoOptions,
                       child: _buildAvatar(),
